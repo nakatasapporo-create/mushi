@@ -1,0 +1,15 @@
+{
+  "name": "文字ならべ - 昆虫シリーズ",
+  "short_name": "昆虫文字ならべ",
+  "description": "昆虫の名前をならべて遊ぶ文字ゲーム",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#55cbf9",
+  "theme_color": "#55cbf9",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

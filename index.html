@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>文字ならべ - 昆虫シリーズ</title>
+    <meta name="theme-color" content="#55cbf9">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="昆虫文字ならべ">
+    <meta name="description" content="昆虫の名前をならべる、子ども向け文字あそびゲーム">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+    <link rel="apple-touch-icon" href="./icons/icon-192.png">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Google Fonts (丸ゴシックで子供向けに) -->
+    <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Zen Maru Gothic', sans-serif;
+            background-color: #55cbf9; /* 画像に近い水色 */
+            touch-action: manipulation; /* ズームなどの誤作動防止 */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* 揺れるアニメーション（不正解時） */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-10px); }
+            40% { transform: translateX(10px); }
+            60% { transform: translateX(-10px); }
+            80% { transform: translateX(10px); }
+        }
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* 正解時のマル表示アニメーション */
+        @keyframes pop {
+            0% { transform: scale(0.5); opacity: 0; }
+            70% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop {
+            animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen overflow-hidden flex justify-center items-center">
+    <div id="root" class="w-full h-full max-w-4xl mx-auto flex flex-col relative"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- オリジナルアイコン（SVG）の定義 ---
+        const LadybugIcon = () => (
+            <svg viewBox="0 0 100 100" className="w-full h-full p-2">
+                {/* 足 */}
+                <path d="M 30 35 L 15 25 M 25 50 L 10 50 M 30 65 L 15 75" stroke="#333" strokeWidth="4" fill="none" strokeLinecap="round" />
+                <path d="M 70 35 L 85 25 M 75 50 L 90 50 M 70 65 L 85 75" stroke="#333" strokeWidth="4" fill="none" strokeLinecap="round" />
+                
+                {/* 触角 */}
+                <path d="M 42 22 Q 35 10 30 12 M 58 22 Q 65 10 70 12" stroke="#333" strokeWidth="3" fill="none" strokeLinecap="round" />
+                
+                {/* 頭 */}
+                <circle cx="50" cy="26" r="14" fill="#333" />
+                <circle cx="44" cy="22" r="3" fill="#FFF" />
+                <circle cx="56" cy="22" r="3" fill="#FFF" />
+                
+                {/* 体（赤い羽） */}
+                <path d="M 50 30 A 32 35 0 0 0 18 62 A 32 35 0 0 0 82 62 A 32 35 0 0 0 50 30 Z" fill="#ef4444" />
+                
+                {/* 羽の真ん中の線 */}
+                <path d="M 50 30 L 50 97" stroke="#333" strokeWidth="3" />
+                
+                {/* 黒い斑点 */}
+                <circle cx="35" cy="50" r="7" fill="#333" />
+                <circle cx="65" cy="50" r="7" fill="#333" />
+                <circle cx="32" cy="75" r="6" fill="#333" />
+                <circle cx="68" cy="75" r="6" fill="#333" />
+                <circle cx="50" cy="65" r="5" fill="#333" />
+                <circle cx="50" cy="90" r="4.5" fill="#333" />
+            </svg>
+        );
+
+        const FireflyIcon = () => (
+            <svg viewBox="0 0 100 100" className="w-full h-full rounded-2xl overflow-hidden" style={{backgroundColor: '#1e1b4b'}}>
+                {/* 夜空の星 */}
+                <circle cx="20" cy="20" r="1.5" fill="#FFF" opacity="0.8"/>
+                <circle cx="80" cy="30" r="2" fill="#FFF" opacity="0.6"/>
+                <circle cx="40" cy="80" r="1.5" fill="#FFF" opacity="0.7"/>
+                <circle cx="70" cy="15" r="1" fill="#FFF" opacity="0.9"/>
+                
+                {/* 草むら */}
+                <path d="M -10 110 Q 30 70 40 110" fill="#14532d" />
+                <path d="M 60 110 Q 80 60 110 110" fill="#166534" />
+
+                {/* ホタルの光（ふわふわ光るエフェクト） */}
+                <circle cx="65" cy="50" r="22" fill="#fef08a" opacity="0.3" className="animate-pulse" />
+                <circle cx="65" cy="50" r="12" fill="#fef08a" opacity="0.6" className="animate-pulse" />
+                
+                {/* 体と羽 */}
+                <ellipse cx="45" cy="55" rx="18" ry="10" fill="#262626" transform="rotate(-15, 45, 55)" />
+                <path d="M 45 45 Q 60 40 65 50 Q 60 60 45 65" fill="#404040" />
+                
+                {/* 光るお尻と頭 */}
+                <ellipse cx="65" cy="50" rx="8" ry="6" fill="#fef08a" transform="rotate(-15, 65, 50)" />
+                <circle cx="30" cy="59" r="7" fill="#000" />
+                
+                {/* 触角 */}
+                <path d="M 28 55 Q 20 40 15 45" stroke="#000" strokeWidth="2" fill="none" strokeLinecap="round" />
+                <path d="M 32 53 Q 28 35 23 38" stroke="#000" strokeWidth="2" fill="none" strokeLinecap="round" />
+            </svg>
+        );
+
+        const BeetleIcon = () => (
+            <svg viewBox="0 0 100 100" className="w-full h-full p-2">
+                {/* 足 */}
+                <path d="M 35 55 L 15 45 L 10 55" stroke="#451a03" strokeWidth="3.5" fill="none" strokeLinejoin="round" />
+                <path d="M 65 55 L 85 45 L 90 55" stroke="#451a03" strokeWidth="3.5" fill="none" strokeLinejoin="round" />
+                <path d="M 35 65 L 10 75 L 15 85" stroke="#451a03" strokeWidth="3.5" fill="none" strokeLinejoin="round" />
+                <path d="M 65 65 L 90 75 L 85 85" stroke="#451a03" strokeWidth="3.5" fill="none" strokeLinejoin="round" />
+                <path d="M 40 40 L 25 30 L 20 35" stroke="#451a03" strokeWidth="3.5" fill="none" strokeLinejoin="round" />
+                <path d="M 60 40 L 75 30 L 80 35" stroke="#451a03" strokeWidth="3.5" fill="none" strokeLinejoin="round" />
+                
+                {/* 胴体 */}
+                <ellipse cx="50" cy="65" rx="22" ry="28" fill="#78350f" />
+                <path d="M 50 37 V 93" stroke="#451a03" strokeWidth="2.5" opacity="0.6" />
+                
+                {/* 頭部 */}
+                <ellipse cx="50" cy="32" rx="14" ry="10" fill="#451a03" />
+                
+                {/* 立派なツノ */}
+                <path d="M 50 25 L 50 5 M 40 10 L 50 5 L 60 10" stroke="#451a03" strokeWidth="5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M 43 32 L 35 20 M 57 32 L 65 20" stroke="#451a03" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+            </svg>
+        );
+
+        // 問題データ（昆虫シリーズ 10問）
+        const INSECT_QUESTIONS = [
+            { word: 'あり', emoji: '🐜' },
+            { word: 'はち', emoji: '🐝' },
+            { word: 'てんとうむし', emoji: '🐞', customImage: <LadybugIcon /> },
+            { word: 'はえ', emoji: '🪰' },
+            { word: 'くも', emoji: '🕷️' },
+            { word: 'ちょうちょ', emoji: '🦋' },
+            { word: 'ばった', emoji: '🦗' },
+            { word: 'ほたる', emoji: '✨', customImage: <FireflyIcon /> },
+            { word: 'かぶとむし', emoji: '🪲', customImage: <BeetleIcon /> },
+            { word: 'けむし', emoji: '🐛' }
+        ];
+
+        // 配列をシャッフルする関数
+        function shuffleArray(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        function App() {
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [slots, setSlots] = useState([]);
+            const [choices, setChoices] = useState([]);
+            const [isError, setIsError] = useState(false);
+            const [isCorrect, setIsCorrect] = useState(false);
+            const [isFinished, setIsFinished] = useState(false);
+
+            // 問題の初期化
+            const loadQuestion = (index) => {
+                if (index >= INSECT_QUESTIONS.length) {
+                    setIsFinished(true);
+                    return;
+                }
+
+                const question = INSECT_QUESTIONS[index];
+                const chars = question.word.split('');
+                
+                // 正解の文字数分の空スロットを作成
+                setSlots(new Array(chars.length).fill(null));
+
+                // 選択肢をシャッフルして作成
+                const shuffledChars = shuffleArray(chars);
+                const initialChoices = shuffledChars.map((char, i) => ({
+                    id: `choice-${i}`,
+                    char: char,
+                    used: false
+                }));
+                
+                // シャッフルした結果が偶然正解と同じ順番になってしまった場合は再シャッフル（文字数が少ないため稀に起きる）
+                if (initialChoices.map(c => c.char).join('') === question.word && chars.length > 1) {
+                     // 簡易的な再シャッフル (最初と最後を入れ替える)
+                     const temp = initialChoices[0];
+                     initialChoices[0] = initialChoices[initialChoices.length - 1];
+                     initialChoices[initialChoices.length - 1] = temp;
+                }
+
+                setChoices(initialChoices);
+                setIsError(false);
+                setIsCorrect(false);
+            };
+
+            // 初回マウント時に1問目を読み込む
+            useEffect(() => {
+                loadQuestion(0);
+            }, []);
+
+            // 選択肢の文字をタップしたときの処理
+            const handleChoiceClick = (choice) => {
+                if (choice.used || isCorrect || isError) return;
+
+                // 最初の空いているスロットを探す
+                const firstEmptyIndex = slots.findIndex(slot => slot === null);
+                if (firstEmptyIndex !== -1) {
+                    const newSlots = [...slots];
+                    newSlots[firstEmptyIndex] = choice;
+                    setSlots(newSlots);
+
+                    const newChoices = choices.map(c => 
+                        c.id === choice.id ? { ...c, used: true } : c
+                    );
+                    setChoices(newChoices);
+                }
+            };
+
+            // スロット（配置済み）の文字をタップしたときの処理（元に戻す）
+            const handleSlotClick = (slot, index) => {
+                if (!slot || isCorrect || isError) return;
+
+                const newSlots = [...slots];
+                newSlots[index] = null;
+                setSlots(newSlots);
+
+                const newChoices = choices.map(c => 
+                    c.id === slot.id ? { ...c, used: false } : c
+                );
+                setChoices(newChoices);
+            };
+
+            // 全てのスロットが埋まったら正解判定を行う
+            useEffect(() => {
+                if (slots.length > 0 && slots.every(slot => slot !== null)) {
+                    const currentWord = slots.map(slot => slot.char).join('');
+                    const correctWord = INSECT_QUESTIONS[currentIndex].word;
+
+                    if (currentWord === correctWord) {
+                        // 正解
+                        setIsCorrect(true);
+                        setTimeout(() => {
+                            setCurrentIndex(prev => prev + 1);
+                            loadQuestion(currentIndex + 1);
+                        }, 1500); // 1.5秒後に次の問題へ
+                    } else {
+                        // 不正解
+                        setIsError(true);
+                        setTimeout(() => {
+                            // 揺れるアニメーションの後に元に戻す
+                            setIsError(false);
+                            setSlots(new Array(INSECT_QUESTIONS[currentIndex].word.length).fill(null));
+                            setChoices(choices.map(c => ({ ...c, used: false })));
+                        }, 800);
+                    }
+                }
+            }, [slots]);
+
+            // 最初からやり直す
+            const handleReset = () => {
+                setCurrentIndex(0);
+                setIsFinished(false);
+                loadQuestion(0);
+            };
+
+            if (isFinished) {
+                return (
+                    <div className="flex-1 flex flex-col items-center justify-center text-white">
+                        <div className="text-6xl mb-8">🎉</div>
+                        <h1 className="text-4xl font-bold mb-8">全問クリア！</h1>
+                        <button 
+                            onClick={handleReset}
+                            className="bg-white text-blue-500 font-bold text-2xl py-4 px-8 rounded-full shadow-lg active:scale-95 transition-transform"
+                        >
+                            もういちどあそぶ
+                        </button>
+                    </div>
+                );
+            }
+
+            const currentQuestion = INSECT_QUESTIONS[currentIndex];
+
+            return (
+                <div className="flex-1 flex flex-col pt-4 px-4 pb-12 relative">
+                    
+                    {/* ヘッダー領域 */}
+                    <div className="flex justify-between items-center w-full mb-6">
+                        {/* 閉じる（リセット）ボタン */}
+                        <button 
+                            onClick={handleReset}
+                            className="w-12 h-12 bg-gray-400/50 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-sm active:scale-95"
+                        >
+                            ×
+                        </button>
+                        
+                        {/* 進捗表示 */}
+                        <div className="bg-gray-400/50 text-white font-bold px-4 py-2 rounded-xl text-xl">
+                            {currentIndex + 1} / {INSECT_QUESTIONS.length}
+                        </div>
+                    </div>
+
+                    {/* メインのイラスト領域 */}
+                    <div className="flex justify-center mb-8 relative">
+                        <div className="w-64 h-64 sm:w-80 sm:h-80 bg-white rounded-3xl border-[6px] border-blue-500 flex items-center justify-center text-9xl sm:text-[140px] shadow-xl relative p-4">
+                            {currentQuestion?.customImage ? currentQuestion.customImage : currentQuestion?.emoji}
+                            
+                            {/* 正解時のマル表示 */}
+                            {isCorrect && (
+                                <div className="absolute inset-0 flex items-center justify-center animate-pop z-10">
+                                    <div className="w-56 h-56 border-[24px] border-red-500 rounded-full opacity-90"></div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* 解答スロット（枠） */}
+                    <div className={`flex justify-center flex-wrap gap-2 sm:gap-3 mb-10 sm:mb-16 px-2 ${isError ? 'animate-shake' : ''}`}>
+                        {slots.map((slot, index) => (
+                            <div 
+                                key={`slot-${index}`}
+                                onClick={() => handleSlotClick(slot, index)}
+                                className={`w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-xl border-4 flex items-center justify-center text-4xl sm:text-5xl lg:text-6xl cursor-pointer
+                                    ${slot ? 'bg-white border-blue-500 text-black shadow-md' : 'bg-white border-gray-300 shadow-inner'}`}
+                            >
+                                {slot ? slot.char : ''}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* 選択肢の文字 */}
+                    <div className="flex justify-center gap-2 sm:gap-4 flex-wrap px-2">
+                        {choices.map((choice) => (
+                            <button
+                                key={choice.id}
+                                onClick={() => handleChoiceClick(choice)}
+                                className={`w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-xl border-4 text-4xl sm:text-5xl lg:text-6xl font-bold transition-all duration-200
+                                    ${choice.used 
+                                        ? 'bg-transparent border-transparent text-transparent pointer-events-none' 
+                                        : 'bg-white border-blue-500 text-black shadow-[0_6px_0_#2563eb] sm:shadow-[0_8px_0_#2563eb] active:translate-y-2 active:shadow-none'}`}
+                            >
+                                {choice.char}
+                            </button>
+                        ))}
+                    </div>
+
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch(error => {
+            console.warn('オフライン機能を登録できませんでした:', error);
+          });
+        });
+      }
+    </script>
+</body>
+</html>
