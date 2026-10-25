@@ -1,25 +1,15 @@
-const CACHE_NAME = 'insect-word-game-v1';
+const CACHE_NAME = 'insect-word-game-v3';
 const CORE_ASSETS = [
   './', './index.html', './manifest.webmanifest',
-  './icons/icon-192.png', './icons/icon-512.png'
-];
-const EXTERNAL_ASSETS = [
-  'https://cdn.tailwindcss.com',
-  'https://unpkg.com/react@18/umd/react.production.min.js',
-  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-  'https://unpkg.com/@babel/standalone/babel.min.js',
-  'https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@700&display=swap'
+  './icons/icon-192.png', './icons/icon-512.png',
+  './vendor/tailwind.js', './vendor/react.production.min.js',
+  './vendor/react-dom.production.min.js', './vendor/babel.min.js'
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
     await cache.addAll(CORE_ASSETS);
-    // 外部資源が一部失敗しても、PWA本体のインストールは続ける。
-    await Promise.allSettled(EXTERNAL_ASSETS.map(async url => {
-      const response = await fetch(url, { mode: 'no-cors' });
-      await cache.put(url, response);
-    }));
     await self.skipWaiting();
   })());
 });
@@ -38,6 +28,16 @@ self.addEventListener('fetch', event => {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
+    // HTML はオンライン時に更新を確認し、オフライン時は保存版を返す。
+    if (event.request.mode === 'navigate') {
+      try {
+        const response = await fetch(event.request);
+        if (response.ok) await cache.put(event.request, response.clone());
+        return response;
+      } catch (_) {
+        return (await cache.match(event.request)) || (await cache.match('./index.html')) || Response.error();
+      }
+    }
     const cached = await cache.match(event.request);
     if (cached) return cached;
     try {
@@ -47,10 +47,6 @@ self.addEventListener('fetch', event => {
       }
       return response;
     } catch (error) {
-      if (event.request.mode === 'navigate') {
-        const fallback = await cache.match('./index.html');
-        if (fallback) return fallback;
-      }
       throw error;
     }
   })());
